@@ -75,7 +75,7 @@ class EspaceClient extends BaseController
     {
         $data = [
             'title'       => 'Connexion client',
-            'title_brand' => 'MVola Client',
+            'title_brand' => 'VOLA',
         ];
         return view('client/login', $data);
     }
@@ -118,7 +118,7 @@ class EspaceClient extends BaseController
 
         $data = [
             'title'       => 'Tableau de bord',
-            'title_brand' => 'MVola Client',
+            'title_brand' => 'VOLA',
             'nav'         => ['Historique' => 'client/historique', 'Déconnexion' => 'client/logout'],
             'telephone'   => $tel,
             'operateur'   => $this->operateurNom($tel),
@@ -140,7 +140,7 @@ class EspaceClient extends BaseController
 
         $data = [
             'title'       => 'Mon solde',
-            'title_brand' => 'MVola Client',
+            'title_brand' => 'VOLA',
             'nav'         => ['Tableau de bord' => 'client/dashboard', 'Déconnexion' => 'client/logout'],
             'telephone'   => $tel,
             'solde'       => $compte['solde'],
@@ -156,7 +156,7 @@ class EspaceClient extends BaseController
         }
         $data = [
             'title'       => 'Dépôt',
-            'title_brand' => 'MVola Client',
+            'title_brand' => 'VOLA',
             'nav'         => ['Tableau de bord' => 'client/dashboard', 'Déconnexion' => 'client/logout'],
             'telephone'   => $tel,
         ];
@@ -201,7 +201,7 @@ class EspaceClient extends BaseController
         $compte = $this->getCompte($this->ensureClient($tel)['id']);
         $data = [
             'title'       => 'Retrait',
-            'title_brand' => 'MVola Client',
+            'title_brand' => 'VOLA',
             'nav'         => ['Tableau de bord' => 'client/dashboard', 'Déconnexion' => 'client/logout'],
             'telephone'   => $tel,
             'solde'       => $compte['solde'],
@@ -250,7 +250,7 @@ class EspaceClient extends BaseController
         }
         $data = [
             'title'       => 'Transfert',
-            'title_brand' => 'MVola Client',
+            'title_brand' => 'VOLA',
             'nav'         => ['Tableau de bord' => 'client/dashboard', 'Déconnexion' => 'client/logout'],
             'telephone'   => $tel,
         ];
@@ -348,7 +348,7 @@ class EspaceClient extends BaseController
 
         $data = [
             'title'       => 'Historique',
-            'title_brand' => 'MVola Client',
+            'title_brand' => 'VOLA',
             'nav'         => ['Tableau de bord' => 'client/dashboard', 'Déconnexion' => 'client/logout'],
             'telephone'   => $tel,
             'operations'  => $ops,
