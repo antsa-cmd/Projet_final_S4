@@ -233,6 +233,42 @@ class Admin extends BaseController
         return redirect()->to('admin/baremes')->with('success', 'Tranche de frais supprimée.');
     }
 
+    public function baremeEdit($id)
+    {
+        $bareme = (new BaremeFrais())->find($id);
+        if (! $bareme) {
+            return redirect()->to('admin/baremes')->with('error', 'Barème introuvable.');
+        }
+        $data = [
+            'title'       => 'Modifier un barème',
+            'title_brand' => 'Espace Opérateur',
+            'sidebar'     => true,
+            'nav'         => $this->nav('admin/baremes'),
+            'bareme'      => $bareme,
+            'types'       => (new TypeOperation())->orderBy('nom')->findAll(),
+        ];
+        return view('admin/bareme_edit', $data);
+    }
+
+    public function baremeUpdate($id)
+    {
+        $bareme = (new BaremeFrais())->find($id);
+        if (! $bareme) {
+            return redirect()->to('admin/baremes')->with('error', 'Barème introuvable.');
+        }
+        $rules = [
+            'type_operation_id' => 'required|integer',
+            'montant_min'       => 'required|numeric',
+            'montant_max'       => 'required|numeric',
+            'frais'             => 'required|numeric',
+        ];
+        if (! $this->validate($rules)) {
+            return redirect()->back()->withInput()->with('error', 'Veuillez remplir tous les champs correctement.');
+        }
+        (new BaremeFrais())->update($id, $this->request->getPost());
+        return redirect()->to('admin/baremes')->with('success', 'Barème mis à jour.');
+    }
+
     // ---------- COMMISSIONS INTER-OPERATEUR ----------
     public function commissions()
     {
@@ -288,18 +324,24 @@ class Admin extends BaseController
                    ->groupBy('type_operation.nom')
                    ->findAll();
 
-        $total = 0;
+        $totalFrais = 0;
         $retrait = 0;
-        $transfert = 0;
+        $transfertFrais = 0;
         foreach ($rows as $r) {
-            $total += $r['total_frais'];
+            $totalFrais += $r['total_frais'];
             if (strtolower($r['type']) === 'retrait') {
                 $retrait += $r['total_frais'];
             }
             if (strtolower($r['type']) === 'transfert') {
-                $transfert += $r['total_frais'];
+                $transfertFrais += $r['total_frais'];
             }
         }
+
+        $totalCommission = (new Operation())
+            ->join('type_operation', 'type_operation.id = operation.type_operation_id')
+            ->where('type_operation.nom', 'transfert')
+            ->selectSum('operation.commission')
+            ->first()['commission'] ?? 0;
 
         $data = [
             'title'       => 'Situation des gains',
@@ -307,9 +349,11 @@ class Admin extends BaseController
             'sidebar'     => true,
             'nav'         => $this->nav('admin/gains'),
             'rows'        => $rows,
-            'total'       => $total,
+            'total_frais' => $totalFrais,
             'retrait'     => $retrait,
-            'transfert'   => $transfert,
+            'transfert_frais' => $transfertFrais,
+            'total_commission' => $totalCommission,
+            'net'         => $totalFrais - $totalCommission,
         ];
         return view('admin/gains', $data);
     }

@@ -24,6 +24,8 @@ $routes->get('admin/type/delete/(:num)', 'Admin::typeDelete/$1');
 $routes->get('admin/baremes', 'Admin::baremes');
 $routes->post('admin/baremes', 'Admin::baremeCreate');
 $routes->get('admin/bareme/delete/(:num)', 'Admin::baremeDelete/$1');
+$routes->get('admin/bareme/edit/(:num)', 'Admin::baremeEdit/$1');
+$routes->post('admin/bareme/edit/(:num)', 'Admin::baremeUpdate/$1');
 
 $routes->get('admin/commissions', 'Admin::commissions');
 $routes->post('admin/commissions', 'Admin::commissionCreate');

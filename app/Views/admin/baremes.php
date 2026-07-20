@@ -19,7 +19,10 @@
                 <td class="tnum"><?= number_format($b['montant_min'], 0, ',', ' ') ?></td>
                 <td class="tnum"><?= number_format($b['montant_max'], 0, ',', ' ') ?></td>
                 <td class="tnum"><?= number_format($b['frais'], 0, ',', ' ') ?></td>
-                <td class="right"><a class="btn danger sm" href="<?= site_url('admin/bareme/delete/' . $b['id']) ?>" onclick="return confirm('Supprimer ?');"><i data-lucide="trash-2"></i></a></td>
+                <td class="right">
+                    <a class="btn sm" href="<?= site_url('admin/bareme/edit/' . $b['id']) ?>"><i data-lucide="pencil"></i></a>
+                    <a class="btn danger sm" href="<?= site_url('admin/bareme/delete/' . $b['id']) ?>" onclick="return confirm('Supprimer ?');"><i data-lucide="trash-2"></i></a>
+                </td>
             </tr>
         <?php endforeach; ?>
         </tbody>
