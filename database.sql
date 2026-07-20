@@ -55,6 +55,21 @@ CREATE TABLE compte (
 
 
 
+CREATE TABLE commission_inter_operateur (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    operateur_source_id INTEGER NOT NULL,
+    operateur_destination_id INTEGER NOT NULL,
+    montant_min REAL NOT NULL,
+    montant_max REAL NOT NULL,
+    pourcentage REAL NOT NULL,
+    FOREIGN KEY (operateur_source_id)
+        REFERENCES operateur(id),
+    FOREIGN KEY (operateur_destination_id)
+        REFERENCES operateur(id)
+);
+
+
+
 CREATE TABLE operation (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
 
@@ -65,6 +80,7 @@ CREATE TABLE operation (
 
     montant REAL NOT NULL,
     frais REAL NOT NULL,
+    commission REAL DEFAULT 0,
 
     date_operation DATETIME DEFAULT CURRENT_TIMESTAMP,
 

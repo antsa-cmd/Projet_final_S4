@@ -63,7 +63,7 @@ class InitSeeder extends Seeder
             [1000001, 2000000, 2500],
             [2000001, 5000000, 3000],
         ];
-        foreach ($types as $t) {
+        foreach (['dépôt', 'retrait', 'transfert'] as $t) {
             foreach ($tranches as $tr) {
                 $exists = $bareme->where('type_operation_id', $typeIds[$t])
                                  ->where('montant_min', $tr[0])
@@ -76,6 +76,34 @@ class InitSeeder extends Seeder
                         'montant_max'       => $tr[1],
                         'frais'             => $tr[2],
                     ]);
+                }
+            }
+        }
+
+        // Commission inter-opérateur (pourcentage prélevé en plus des frais de transfert
+        // lors d'un envoi vers un autre opérateur). 10% par défaut par tranche.
+        $commissionModel = new \App\Models\CommissionInterOperateur();
+        foreach ($ops as $src) {
+            foreach ($ops as $dst) {
+                if ($src === $dst) {
+                    continue;
+                }
+                foreach ($tranches as $tr) {
+                    $exists = $commissionModel
+                        ->where('operateur_source_id', $opIds[$src])
+                        ->where('operateur_destination_id', $opIds[$dst])
+                        ->where('montant_min', $tr[0])
+                        ->where('montant_max', $tr[1])
+                        ->first();
+                    if (! $exists) {
+                        $commissionModel->insert([
+                            'operateur_source_id'      => $opIds[$src],
+                            'operateur_destination_id' => $opIds[$dst],
+                            'montant_min'              => $tr[0],
+                            'montant_max'              => $tr[1],
+                            'pourcentage'              => 10,
+                        ]);
+                    }
                 }
             }
         }
