@@ -312,12 +312,15 @@ class EspaceClient extends BaseController
         if ($tel instanceof \CodeIgniter\HTTP\RedirectResponse) {
             return $tel;
         }
-        $type   = $this->request->getGet('type');
-        $montant = (float) $this->request->getGet('montant');
-        $dest    = $this->request->getGet('dest');
-        $frais   = $this->fraisFor($type, $montant);
-        $destNom = null;
+        $type      = $this->request->getGet('type');
+        $montant   = (float) $this->request->getGet('montant');
+        $dest      = $this->request->getGet('dest');
+        $inclure   = $this->request->getGet('inclure_frais_retrait') === '1';
+        $nbDest    = max(1, (int) $this->request->getGet('nb_dest', 1));
+        $frais     = $this->fraisFor($type, $montant);
+        $destNom   = null;
         $destOperateur = null;
+
         if ($dest) {
             $c = (new Client())->where('telephone', $dest)->first();
             if ($c) {
@@ -325,16 +328,26 @@ class EspaceClient extends BaseController
             }
             $destOperateur = $this->operateurNom($dest);
         }
+
         $commission = ($dest && $type === 'transfert')
             ? $this->commissionFor($tel, $dest, $montant)
             : 0;
+
+        $fraisRetraitSupplementaire = 0;
+        if ($inclure && $type === 'transfert' && $dest) {
+            $fraisRetraitSupplementaire = $this->fraisFor('retrait', $montant) * $nbDest;
+        }
+
+        $total = $montant + $frais + $commission + $fraisRetraitSupplementaire;
+
         return $this->response->setJSON([
             'frais'      => $frais,
             'commission' => $commission,
-            'total'      => $montant + $frais + $commission,
+            'total'      => $total,
             'destNom'    => $destNom,
             'destOperateur' => $destOperateur,
             'srcOperateur'  => $this->operateurNom($tel),
+            'fraisRetraitSupplementaire' => $fraisRetraitSupplementaire,
         ]);
     }
 
@@ -344,46 +357,89 @@ class EspaceClient extends BaseController
         if ($tel instanceof \CodeIgniter\HTTP\RedirectResponse) {
             return $tel;
         }
-        $destTel = trim($this->request->getPost('destinataire'));
-        $montant = (float) $this->request->getPost('montant');
 
-        if (! preg_match('/^[0-9]{9,10}$/', $destTel)) {
-            return redirect()->back()->with('error', 'Numéro du destinataire invalide.');
+        $destinataires = trim($this->request->getPost('destinataires'));
+        $montantTotal  = (float) $this->request->getPost('montant');
+        $inclureFrais  = $this->request->getPost('inclure_frais_retrait') === '1';
+
+        $liste = array_filter(array_map('trim', explode("\n", $destinataires)), fn($n) => $n !== '');
+
+        if (empty($liste)) {
+            return redirect()->back()->with('error', 'Veuillez saisir au moins un numéro de destinataire.');
         }
-        if ($destTel === $tel) {
-            return redirect()->back()->with('error', 'Vous ne pouvez pas vous transférer à vous-même.');
+
+        $liste = array_values(array_unique($liste));
+        $nbDest = count($liste);
+
+        foreach ($liste as $destTel) {
+            if (! preg_match('/^[0-9]{9,10}$/', $destTel)) {
+                return redirect()->back()->with('error', 'Numéro invalide : ' . esc($destTel));
+            }
+            if ($destTel === $tel) {
+                return redirect()->back()->with('error', 'Vous ne pouvez pas vous transférer à vous-même.');
+            }
         }
-        if ($montant <= 0) {
+
+        if ($montantTotal <= 0) {
             return redirect()->back()->with('error', 'Montant invalide.');
         }
 
+        $montantParDest = $montantTotal / $nbDest;
+
         $srcClient = $this->ensureClient($tel);
         $srcCompte = $this->getCompte($srcClient['id']);
-        $frais     = $this->fraisFor('transfert', $montant);
-        $commission = $this->commissionFor($tel, $destTel, $montant);
 
-        if ($srcCompte['solde'] < ($montant + $frais + $commission)) {
-            return redirect()->back()->with('error', 'Solde insuffisant (montant + frais + commission inter-opérateur).');
+        $fraisTotal         = $this->fraisFor('transfert', $montantTotal);
+        $commissionTotal    = 0;
+        foreach ($liste as $destTel) {
+            $commissionTotal += $this->commissionFor($tel, $destTel, $montantParDest);
         }
 
-        $destClient = $this->ensureClient($destTel);
-        $destCompte = $this->getCompte($destClient['id']);
+        $fraisRetraitSupplementaire = 0;
+        if ($inclureFrais) {
+            foreach ($liste as $destTel) {
+                $fraisRetraitSupplementaire += $this->fraisFor('retrait', $montantParDest);
+            }
+        }
 
-        $compteModel = new Compte();
-        $compteModel->update($srcCompte['id'], ['solde' => $srcCompte['solde'] - $montant - $frais - $commission]);
-        $compteModel->update($destCompte['id'], ['solde' => $destCompte['solde'] + $montant]);
+        $totalADebiter = $montantTotal + $fraisTotal + $commissionTotal + $fraisRetraitSupplementaire;
+
+        if ($srcCompte['solde'] < $totalADebiter) {
+            return redirect()->back()->with('error', 'Solde insuffisant (montant + frais + commission' . ($inclureFrais ? ' + frais retrait inclus' : '') . ').');
+        }
+
+        $db = \Config\Database::connect();
+        $db->transStart();
+
+        $db->table('compte')->where('id', $srcCompte['id'])->update(['solde' => $srcCompte['solde'] - $totalADebiter]);
 
         $type = (new TypeOperation())->where('nom', 'transfert')->first();
-        (new Operation())->insert([
-            'type_operation_id'  => $type['id'],
-            'compte_source'      => $srcCompte['id'],
-            'compte_destination' => $destCompte['id'],
-            'montant'            => $montant,
-            'frais'              => $frais,
-            'commission'         => $commission,
-        ]);
 
-        return redirect()->to('client/dashboard')->with('success', 'Transfert de ' . number_format($montant, 2, ',', ' ') . ' Ar vers ' . esc($destTel) . ' effectué.');
+        foreach ($liste as $destTel) {
+            $destClient = $this->ensureClient($destTel);
+            $destCompte = $this->getCompte($destClient['id']);
+
+            $db->table('compte')->where('id', $destCompte['id'])->update(['solde' => $destCompte['solde'] + $montantParDest]);
+
+            $db->table('operation')->insert([
+                'type_operation_id'    => $type['id'],
+                'compte_source'        => $srcCompte['id'],
+                'compte_destination'   => $destCompte['id'],
+                'montant'              => $montantParDest,
+                'frais'                => $fraisTotal / $nbDest,
+                'commission'           => $commissionTotal / $nbDest,
+                'inclure_frais_retrait'=> $inclureFrais ? 1 : 0,
+            ]);
+        }
+
+        $db->transComplete();
+
+        if ($db->transStatus() === false) {
+            return redirect()->back()->with('error', 'Erreur lors du transfert. Veuillez réessayer.');
+        }
+
+        $succesMsg = 'Transfert de ' . number_format($montantTotal, 2, ',', ' ') . ' Ar vers ' . $nbDest . ' destinataire(s) effectué.';
+        return redirect()->to('client/dashboard')->with('success', $succesMsg);
     }
 
     public function historique()

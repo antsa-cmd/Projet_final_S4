@@ -81,6 +81,7 @@ CREATE TABLE operation (
     montant REAL NOT NULL,
     frais REAL NOT NULL,
     commission REAL DEFAULT 0,
+    inclure_frais_retrait INTEGER DEFAULT 0,
 
     date_operation DATETIME DEFAULT CURRENT_TIMESTAMP,
 
