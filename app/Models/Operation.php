@@ -14,6 +14,7 @@ class Operation extends Model
         'compte_destination',
         'montant',
         'frais',
+        'commission',
     ];
     protected $returnType       = 'array';
     protected $useTimestamps    = false;

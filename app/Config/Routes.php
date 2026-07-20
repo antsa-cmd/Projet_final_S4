@@ -25,6 +25,10 @@ $routes->get('admin/baremes', 'Admin::baremes');
 $routes->post('admin/baremes', 'Admin::baremeCreate');
 $routes->get('admin/bareme/delete/(:num)', 'Admin::baremeDelete/$1');
 
+$routes->get('admin/commissions', 'Admin::commissions');
+$routes->post('admin/commissions', 'Admin::commissionCreate');
+$routes->get('admin/commission/delete/(:num)', 'Admin::commissionDelete/$1');
+
 $routes->get('admin/gains', 'Admin::gains');
 $routes->get('admin/comptes', 'Admin::comptes');
 

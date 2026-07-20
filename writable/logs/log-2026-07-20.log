@@ -14,3 +14,17 @@ CRITICAL - 2026-07-20 06:14:38 --> ErrorException: Cannot declare class App\Cont
 [Method: GET, Route: client/login]
 in APPPATH/Controllers/Client.php on line 11.
  1 [internal function]: CodeIgniter\Debug\Exceptions->shutdownHandler()
+CRITICAL - 2026-07-20 11:52:11 --> ErrorException: fwrite(): Write of 54 bytes failed with errno=32 Broken pipe
+[Method: CLI, Route: /]
+in SYSTEMPATH/CLI/InputOutput.php on line 78.
+ 1 [internal function]: CodeIgniter\Debug\Exceptions->errorHandler()
+ 2 SYSTEMPATH/CLI/InputOutput.php(78): fwrite()
+ 3 SYSTEMPATH/CLI/CLI.php(1126): CodeIgniter\CLI\InputOutput->fwrite()
+ 4 SYSTEMPATH/CLI/CLI.php(465): CodeIgniter\CLI\CLI::fwrite()
+ 5 SYSTEMPATH/Commands/ListCommands.php(122): CodeIgniter\CLI\CLI::write()
+ 6 SYSTEMPATH/Commands/ListCommands.php(85): CodeIgniter\Commands\ListCommands->listFull()
+ 7 SYSTEMPATH/CLI/Commands.php(74): CodeIgniter\Commands\ListCommands->run()
+ 8 SYSTEMPATH/CLI/Console.php(47): CodeIgniter\CLI\Commands->run()
+ 9 SYSTEMPATH/Boot.php(442): CodeIgniter\CLI\Console->run()
+10 SYSTEMPATH/Boot.php(166): CodeIgniter\Boot::runCommand()
+11 ROOTPATH/spark(87): CodeIgniter\Boot::bootSpark()

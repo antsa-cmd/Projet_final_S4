@@ -19,6 +19,7 @@ class Admin extends BaseController
             ['label' => 'Préfixes', 'url' => 'admin/prefixes', 'icon' => 'hash'],
             ['label' => 'Types', 'url' => 'admin/types', 'icon' => 'tags'],
             ['label' => 'Barèmes', 'url' => 'admin/baremes', 'icon' => 'sliders-horizontal'],
+            ['label' => 'Commissions', 'url' => 'admin/commissions', 'icon' => 'arrow-left-right'],
             ['label' => 'Gains', 'url' => 'admin/gains', 'icon' => 'trending-up'],
             ['label' => 'Comptes', 'url' => 'admin/comptes', 'icon' => 'users'],
         ];
@@ -230,6 +231,52 @@ class Admin extends BaseController
     {
         (new BaremeFrais())->delete($id);
         return redirect()->to('admin/baremes')->with('success', 'Tranche de frais supprimée.');
+    }
+
+    // ---------- COMMISSIONS INTER-OPERATEUR ----------
+    public function commissions()
+    {
+        $com = new \App\Models\CommissionInterOperateur();
+        $data = [
+            'title'       => 'Commissions inter-opérateur',
+            'title_brand' => 'Espace Opérateur',
+            'sidebar'     => true,
+            'nav'         => $this->nav('admin/commissions'),
+            'commissions' => $com->select('commission_inter_operateur.*, os.nom as src, od.nom as dst')
+                                    ->join('operateur os', 'os.id = commission_inter_operateur.operateur_source_id', 'left')
+                                    ->join('operateur od', 'od.id = commission_inter_operateur.operateur_destination_id', 'left')
+                                    ->orderBy('os.nom')->orderBy('od.nom')->orderBy('montant_min')
+                                    ->findAll(),
+            'operateurs'  => (new OperateurModel())->orderBy('nom')->findAll(),
+        ];
+        return view('admin/commissions', $data);
+    }
+
+    public function commissionCreate()
+    {
+        $com = new \App\Models\CommissionInterOperateur();
+        $rules = [
+            'operateur_source_id'      => 'required|integer',
+            'operateur_destination_id' => 'required|integer',
+            'montant_min'              => 'required|numeric',
+            'montant_max'              => 'required|numeric',
+            'pourcentage'              => 'required|numeric',
+        ];
+        if (! $this->validate($rules)) {
+            return redirect()->back()->with('error', 'Veuillez remplir tous les champs correctement.');
+        }
+        $post = $this->request->getPost();
+        if ($post['operateur_source_id'] == $post['operateur_destination_id']) {
+            return redirect()->back()->with('error', 'L\'opérateur source et destination doivent être différents.');
+        }
+        $com->insert($post);
+        return redirect()->to('admin/commissions')->with('success', 'Tranche de commission ajoutée.');
+    }
+
+    public function commissionDelete($id)
+    {
+        (new \App\Models\CommissionInterOperateur())->delete($id);
+        return redirect()->to('admin/commissions')->with('success', 'Tranche de commission supprimée.');
     }
 
     // ---------- GAINS ----------

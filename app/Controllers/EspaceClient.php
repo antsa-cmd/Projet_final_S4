@@ -66,6 +66,43 @@ class EspaceClient extends BaseController
         return $bareme ? (float) $bareme['frais'] : 0;
     }
 
+    private function operateurId($telephone)
+    {
+        $prefixe = (new \App\Models\Prefixe())
+            ->select('operateur.id as id')
+            ->join('operateur', 'operateur.id = prefixe.operateur_id', 'left')
+            ->where('prefixe.prefixe', substr($telephone, 0, 3))
+            ->first();
+        if (! $prefixe) {
+            $prefixe = (new \App\Models\Prefixe())
+                ->select('operateur.id as id')
+                ->join('operateur', 'operateur.id = prefixe.operateur_id', 'left')
+                ->where('prefixe.prefixe', substr($telephone, 0, 4))
+                ->first();
+        }
+        return $prefixe['id'] ?? null;
+    }
+
+    private function commissionFor($srcTel, $destTel, $montant)
+    {
+        $srcOp = $this->operateurId($srcTel);
+        $dstOp = $this->operateurId($destTel);
+        if ($srcOp === null || $dstOp === null || $srcOp === $dstOp) {
+            return 0;
+        }
+        $com = (new \App\Models\CommissionInterOperateur())
+            ->where('operateur_source_id', $srcOp)
+            ->where('operateur_destination_id', $dstOp)
+            ->where('montant_min <=', $montant)
+            ->where('montant_max >=', $montant)
+            ->first();
+        if (! $com) {
+            return 0;
+        }
+
+        return (float) $montant * ((float) $com['pourcentage'] / 100);
+    }
+
     public function index()
     {
         return redirect()->to('client/login');
@@ -268,16 +305,24 @@ class EspaceClient extends BaseController
         $dest    = $this->request->getGet('dest');
         $frais   = $this->fraisFor($type, $montant);
         $destNom = null;
+        $destOperateur = null;
         if ($dest) {
             $c = (new Client())->where('telephone', $dest)->first();
             if ($c) {
                 $destNom = $c['nom'] ?? null;
             }
+            $destOperateur = $this->operateurNom($dest);
         }
+        $commission = ($dest && $type === 'transfert')
+            ? $this->commissionFor($tel, $dest, $montant)
+            : 0;
         return $this->response->setJSON([
-            'frais'    => $frais,
-            'total'    => $montant + $frais,
-            'destNom'  => $destNom,
+            'frais'      => $frais,
+            'commission' => $commission,
+            'total'      => $montant + $frais + $commission,
+            'destNom'    => $destNom,
+            'destOperateur' => $destOperateur,
+            'srcOperateur'  => $this->operateurNom($tel),
         ]);
     }
 
@@ -303,16 +348,17 @@ class EspaceClient extends BaseController
         $srcClient = $this->ensureClient($tel);
         $srcCompte = $this->getCompte($srcClient['id']);
         $frais     = $this->fraisFor('transfert', $montant);
+        $commission = $this->commissionFor($tel, $destTel, $montant);
 
-        if ($srcCompte['solde'] < ($montant + $frais)) {
-            return redirect()->back()->with('error', 'Solde insuffisant (montant + frais).');
+        if ($srcCompte['solde'] < ($montant + $frais + $commission)) {
+            return redirect()->back()->with('error', 'Solde insuffisant (montant + frais + commission inter-opérateur).');
         }
 
         $destClient = $this->ensureClient($destTel);
         $destCompte = $this->getCompte($destClient['id']);
 
         $compteModel = new Compte();
-        $compteModel->update($srcCompte['id'], ['solde' => $srcCompte['solde'] - $montant - $frais]);
+        $compteModel->update($srcCompte['id'], ['solde' => $srcCompte['solde'] - $montant - $frais - $commission]);
         $compteModel->update($destCompte['id'], ['solde' => $destCompte['solde'] + $montant]);
 
         $type = (new TypeOperation())->where('nom', 'transfert')->first();
@@ -322,6 +368,7 @@ class EspaceClient extends BaseController
             'compte_destination' => $destCompte['id'],
             'montant'            => $montant,
             'frais'              => $frais,
+            'commission'         => $commission,
         ]);
 
         return redirect()->to('client/dashboard')->with('success', 'Transfert de ' . number_format($montant, 2, ',', ' ') . ' Ar vers ' . esc($destTel) . ' effectué.');
