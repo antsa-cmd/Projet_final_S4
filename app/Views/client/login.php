@@ -8,6 +8,10 @@
         <p class="lead">Connectez-vous avec votre numéro. Création automatique du compte.</p>
 
         <form method="post" action="<?= site_url('client/login') ?>">
+            <?php if (session()->getFlashdata('error')): ?>
+                <div class="alert danger" style="margin-bottom:16px;"><?= esc(session()->getFlashdata('error')) ?></div>
+            <?php endif; ?>
+
             <div class="field">
                 <label>Numéro de téléphone</label>
                 <input type="tel" name="telephone" placeholder="ex : 034 12 345 67" value="<?= old('telephone') ?>" required autofocus>
