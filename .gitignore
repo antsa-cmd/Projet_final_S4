@@ -1,0 +1,7 @@
+# CodeIgniter fichiers temporaires
+writable/cache/
+writable/logs/
+writable/session/
+
+# Base SQLite locale
+writable/database.sqlite
