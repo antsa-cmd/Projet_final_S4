@@ -1,17 +1,12 @@
 PRAGMA foreign_keys = ON;
 
--- ===========================
--- TABLE OPERATEUR
--- ===========================
+
 
 CREATE TABLE operateur (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     nom TEXT NOT NULL UNIQUE
 );
 
--- ===========================
--- PREFIXES
--- ===========================
 
 CREATE TABLE prefixe (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -20,18 +15,14 @@ CREATE TABLE prefixe (
     FOREIGN KEY (operateur_id) REFERENCES operateur(id)
 );
 
--- ===========================
--- TYPES D'OPERATIONS
--- ===========================
+
 
 CREATE TABLE type_operation (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     nom TEXT NOT NULL UNIQUE
 );
 
--- ===========================
--- BAREME DES FRAIS
--- ===========================
+
 
 CREATE TABLE bareme_frais (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -43,9 +34,7 @@ CREATE TABLE bareme_frais (
         REFERENCES type_operation(id)
 );
 
--- ===========================
--- CLIENTS
--- ===========================
+
 
 CREATE TABLE client (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -54,9 +43,7 @@ CREATE TABLE client (
     date_creation DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
--- ===========================
--- COMPTE
--- ===========================
+
 
 CREATE TABLE compte (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -66,9 +53,7 @@ CREATE TABLE compte (
         REFERENCES client(id)
 );
 
--- ===========================
--- OPERATIONS
--- ===========================
+
 
 CREATE TABLE operation (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
