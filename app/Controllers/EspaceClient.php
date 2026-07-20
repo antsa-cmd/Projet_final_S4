@@ -1,0 +1,359 @@
+<?php
+
+namespace App\Controllers;
+
+use App\Models\Client;
+use App\Models\Compte;
+use App\Models\Operation;
+use App\Models\TypeOperation;
+use App\Models\BaremeFrais;
+
+class EspaceClient extends BaseController
+{
+    private function ensureClient($telephone)
+    {
+        $client = (new Client())->where('telephone', $telephone)->first();
+        if (! $client) {
+            $clientId = (new Client())->insert(['telephone' => $telephone], true);
+            (new Compte())->insert(['client_id' => $clientId, 'solde' => 0], true);
+            $client = (new Client())->find($clientId);
+        }
+        return $client;
+    }
+
+    private function getCompte($clientId)
+    {
+        return (new Compte())->where('client_id', $clientId)->first();
+    }
+
+    private function requireLogin()
+    {
+        $tel = $this->session->get('telephone');
+        if (! $tel) {
+            return redirect()->to('client/login');
+        }
+        return $tel;
+    }
+
+    private function operateurNom($telephone)
+    {
+        $prefixe = (new \App\Models\Prefixe())
+            ->select('operateur.nom as nom')
+            ->join('operateur', 'operateur.id = prefixe.operateur_id', 'left')
+            ->where('prefixe.prefixe', substr($telephone, 0, 3))
+            ->first();
+        if (! $prefixe) {
+            $prefixe = (new \App\Models\Prefixe())
+                ->select('operateur.nom as nom')
+                ->join('operateur', 'operateur.id = prefixe.operateur_id', 'left')
+                ->where('prefixe.prefixe', substr($telephone, 0, 4))
+                ->first();
+        }
+        return $prefixe['nom'] ?? 'Inconnu';
+    }
+
+    private function fraisFor($typeNom, $montant)
+    {
+        $type = (new TypeOperation())->where('nom', $typeNom)->first();
+        if (! $type) {
+            return 0;
+        }
+        $bareme = (new BaremeFrais())
+            ->where('type_operation_id', $type['id'])
+            ->where('montant_min <=', $montant)
+            ->where('montant_max >=', $montant)
+            ->first();
+        return $bareme ? (float) $bareme['frais'] : 0;
+    }
+
+    public function index()
+    {
+        return redirect()->to('client/login');
+    }
+
+    public function login()
+    {
+        $data = [
+            'title'       => 'Connexion client',
+            'title_brand' => 'MVola Client',
+        ];
+        return view('client/login', $data);
+    }
+
+    public function doLogin()
+    {
+        $telephone = trim($this->request->getPost('telephone'));
+        if (! preg_match('/^[0-9]{9,10}$/', $telephone)) {
+            return redirect()->back()->withInput()->with('error', 'Numéro de téléphone invalide.');
+        }
+        $this->ensureClient($telephone);
+        $this->session->set('telephone', $telephone);
+        return redirect()->to('client/dashboard');
+    }
+
+    public function logout()
+    {
+        $this->session->remove('telephone');
+        return redirect()->to('client/login')->with('success', 'Déconnecté.');
+    }
+
+    public function dashboard()
+    {
+        $tel = $this->requireLogin();
+        if ($tel instanceof \CodeIgniter\HTTP\RedirectResponse) {
+            return $tel;
+        }
+        $client = $this->ensureClient($tel);
+        $compte = $this->getCompte($client['id']);
+
+        $recent = (new Operation())
+            ->select('operation.*, type_operation.nom as type')
+            ->join('type_operation', 'type_operation.id = operation.type_operation_id')
+            ->groupStart()
+                ->where('compte_source', $compte['id'])
+                ->orWhere('compte_destination', $compte['id'])
+            ->groupEnd()
+            ->orderBy('date_operation', 'desc')
+            ->findAll(5);
+
+        $data = [
+            'title'       => 'Tableau de bord',
+            'title_brand' => 'MVola Client',
+            'nav'         => ['Historique' => 'client/historique', 'Déconnexion' => 'client/logout'],
+            'telephone'   => $tel,
+            'operateur'   => $this->operateurNom($tel),
+            'solde'       => $compte['solde'],
+            'recent'      => $recent,
+            'monCompte'   => $compte['id'],
+        ];
+        return view('client/dashboard', $data);
+    }
+
+    public function solde()
+    {
+        $tel = $this->requireLogin();
+        if ($tel instanceof \CodeIgniter\HTTP\RedirectResponse) {
+            return $tel;
+        }
+        $client = $this->ensureClient($tel);
+        $compte = $this->getCompte($client['id']);
+
+        $data = [
+            'title'       => 'Mon solde',
+            'title_brand' => 'MVola Client',
+            'nav'         => ['Tableau de bord' => 'client/dashboard', 'Déconnexion' => 'client/logout'],
+            'telephone'   => $tel,
+            'solde'       => $compte['solde'],
+        ];
+        return view('client/solde', $data);
+    }
+
+    public function depot()
+    {
+        $tel = $this->requireLogin();
+        if ($tel instanceof \CodeIgniter\HTTP\RedirectResponse) {
+            return $tel;
+        }
+        $data = [
+            'title'       => 'Dépôt',
+            'title_brand' => 'MVola Client',
+            'nav'         => ['Tableau de bord' => 'client/dashboard', 'Déconnexion' => 'client/logout'],
+            'telephone'   => $tel,
+        ];
+        return view('client/depot', $data);
+    }
+
+    public function doDepot()
+    {
+        $tel = $this->requireLogin();
+        if ($tel instanceof \CodeIgniter\HTTP\RedirectResponse) {
+            return $tel;
+        }
+        $montant = (float) $this->request->getPost('montant');
+        if ($montant <= 0) {
+            return redirect()->back()->with('error', 'Montant invalide.');
+        }
+        $client  = $this->ensureClient($tel);
+        $compte  = $this->getCompte($client['id']);
+        $frais   = $this->fraisFor('dépôt', $montant);
+
+        $compteModel = new Compte();
+        $compteModel->update($compte['id'], ['solde' => $compte['solde'] + $montant]);
+
+        $type = (new TypeOperation())->where('nom', 'dépôt')->first();
+        (new Operation())->insert([
+            'type_operation_id' => $type['id'],
+            'compte_source'     => $compte['id'],
+            'compte_destination' => $compte['id'],
+            'montant'           => $montant,
+            'frais'             => $frais,
+        ]);
+
+        return redirect()->to('client/dashboard')->with('success', 'Dépôt de ' . number_format($montant, 2, ',', ' ') . ' Ar effectué.');
+    }
+
+    public function retrait()
+    {
+        $tel = $this->requireLogin();
+        if ($tel instanceof \CodeIgniter\HTTP\RedirectResponse) {
+            return $tel;
+        }
+        $compte = $this->getCompte($this->ensureClient($tel)['id']);
+        $data = [
+            'title'       => 'Retrait',
+            'title_brand' => 'MVola Client',
+            'nav'         => ['Tableau de bord' => 'client/dashboard', 'Déconnexion' => 'client/logout'],
+            'telephone'   => $tel,
+            'solde'       => $compte['solde'],
+        ];
+        return view('client/retrait', $data);
+    }
+
+    public function doRetrait()
+    {
+        $tel = $this->requireLogin();
+        if ($tel instanceof \CodeIgniter\HTTP\RedirectResponse) {
+            return $tel;
+        }
+        $montant = (float) $this->request->getPost('montant');
+        if ($montant <= 0) {
+            return redirect()->back()->with('error', 'Montant invalide.');
+        }
+        $client = $this->ensureClient($tel);
+        $compte = $this->getCompte($client['id']);
+        $frais  = $this->fraisFor('retrait', $montant);
+
+        if ($compte['solde'] < ($montant + $frais)) {
+            return redirect()->back()->with('error', 'Solde insuffisant (montant + frais).');
+        }
+
+        $compteModel = new Compte();
+        $compteModel->update($compte['id'], ['solde' => $compte['solde'] - $montant - $frais]);
+
+        $type = (new TypeOperation())->where('nom', 'retrait')->first();
+        (new Operation())->insert([
+            'type_operation_id'  => $type['id'],
+            'compte_source'      => $compte['id'],
+            'compte_destination' => null,
+            'montant'            => $montant,
+            'frais'              => $frais,
+        ]);
+
+        return redirect()->to('client/dashboard')->with('success', 'Retrait de ' . number_format($montant, 2, ',', ' ') . ' Ar effectué.');
+    }
+
+    public function transfert()
+    {
+        $tel = $this->requireLogin();
+        if ($tel instanceof \CodeIgniter\HTTP\RedirectResponse) {
+            return $tel;
+        }
+        $data = [
+            'title'       => 'Transfert',
+            'title_brand' => 'MVola Client',
+            'nav'         => ['Tableau de bord' => 'client/dashboard', 'Déconnexion' => 'client/logout'],
+            'telephone'   => $tel,
+        ];
+        return view('client/transfert', $data);
+    }
+
+    public function frais()
+    {
+        $tel = $this->requireLogin();
+        if ($tel instanceof \CodeIgniter\HTTP\RedirectResponse) {
+            return $tel;
+        }
+        $type   = $this->request->getGet('type');
+        $montant = (float) $this->request->getGet('montant');
+        $dest    = $this->request->getGet('dest');
+        $frais   = $this->fraisFor($type, $montant);
+        $destNom = null;
+        if ($dest) {
+            $c = (new Client())->where('telephone', $dest)->first();
+            if ($c) {
+                $destNom = $c['nom'] ?? null;
+            }
+        }
+        return $this->response->setJSON([
+            'frais'    => $frais,
+            'total'    => $montant + $frais,
+            'destNom'  => $destNom,
+        ]);
+    }
+
+    public function doTransfert()
+    {
+        $tel = $this->requireLogin();
+        if ($tel instanceof \CodeIgniter\HTTP\RedirectResponse) {
+            return $tel;
+        }
+        $destTel = trim($this->request->getPost('destinataire'));
+        $montant = (float) $this->request->getPost('montant');
+
+        if (! preg_match('/^[0-9]{9,10}$/', $destTel)) {
+            return redirect()->back()->with('error', 'Numéro du destinataire invalide.');
+        }
+        if ($destTel === $tel) {
+            return redirect()->back()->with('error', 'Vous ne pouvez pas vous transférer à vous-même.');
+        }
+        if ($montant <= 0) {
+            return redirect()->back()->with('error', 'Montant invalide.');
+        }
+
+        $srcClient = $this->ensureClient($tel);
+        $srcCompte = $this->getCompte($srcClient['id']);
+        $frais     = $this->fraisFor('transfert', $montant);
+
+        if ($srcCompte['solde'] < ($montant + $frais)) {
+            return redirect()->back()->with('error', 'Solde insuffisant (montant + frais).');
+        }
+
+        $destClient = $this->ensureClient($destTel);
+        $destCompte = $this->getCompte($destClient['id']);
+
+        $compteModel = new Compte();
+        $compteModel->update($srcCompte['id'], ['solde' => $srcCompte['solde'] - $montant - $frais]);
+        $compteModel->update($destCompte['id'], ['solde' => $destCompte['solde'] + $montant]);
+
+        $type = (new TypeOperation())->where('nom', 'transfert')->first();
+        (new Operation())->insert([
+            'type_operation_id'  => $type['id'],
+            'compte_source'      => $srcCompte['id'],
+            'compte_destination' => $destCompte['id'],
+            'montant'            => $montant,
+            'frais'              => $frais,
+        ]);
+
+        return redirect()->to('client/dashboard')->with('success', 'Transfert de ' . number_format($montant, 2, ',', ' ') . ' Ar vers ' . esc($destTel) . ' effectué.');
+    }
+
+    public function historique()
+    {
+        $tel = $this->requireLogin();
+        if ($tel instanceof \CodeIgniter\HTTP\RedirectResponse) {
+            return $tel;
+        }
+        $client = $this->ensureClient($tel);
+        $compte = $this->getCompte($client['id']);
+
+        $ops = (new Operation())
+            ->select('operation.*, type_operation.nom as type')
+            ->join('type_operation', 'type_operation.id = operation.type_operation_id')
+            ->groupStart()
+                ->where('compte_source', $compte['id'])
+                ->orWhere('compte_destination', $compte['id'])
+            ->groupEnd()
+            ->orderBy('date_operation', 'desc')
+            ->findAll();
+
+        $data = [
+            'title'       => 'Historique',
+            'title_brand' => 'MVola Client',
+            'nav'         => ['Tableau de bord' => 'client/dashboard', 'Déconnexion' => 'client/logout'],
+            'telephone'   => $tel,
+            'operations'  => $ops,
+            'monCompte'   => $compte['id'],
+        ];
+        return view('client/historique', $data);
+    }
+}
