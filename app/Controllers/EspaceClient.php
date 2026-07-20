@@ -123,6 +123,18 @@ class EspaceClient extends BaseController
         if (! preg_match('/^[0-9]{9,10}$/', $telephone)) {
             return redirect()->back()->withInput()->with('error', 'Numéro de téléphone invalide.');
         }
+        // Block login if phone prefix is not configured
+        $prefixe = (new \App\Models\Prefixe())
+            ->where('prefixe', substr($telephone, 0, 3))
+            ->first();
+        if (! $prefixe) {
+            $prefixe = (new \App\Models\Prefixe())
+                ->where('prefixe', substr($telephone, 0, 4))
+                ->first();
+        }
+        if (! $prefixe) {
+            return redirect()->back()->withInput()->with('error', 'Préfixe inconnu.');
+        }
         $this->ensureClient($telephone);
         $this->session->set('telephone', $telephone);
         return redirect()->to('client/dashboard');
