@@ -107,5 +107,13 @@ class InitSeeder extends Seeder
                 }
             }
         }
+        // Paramètre : opérateur de l'application (ex: Telma)
+        $param = new \App\Models\Parametre();
+        if (! $param->where('cle', 'operateur_application_id')->first()) {
+            $param->insert([
+                'cle'   => 'operateur_application_id',
+                'valeur' => $opIds['Telma'],
+            ]);
+        }
     }
 }

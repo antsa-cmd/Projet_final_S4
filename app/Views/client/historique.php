@@ -19,7 +19,7 @@
     <?php else: ?>
         <table class="table" id="tx-table">
             <thead>
-                <tr><th>Date</th><th>Opération</th><th>Montant</th><th>Frais</th><th>Solde</th></tr>
+                <tr><th>Date</th><th>Opération</th><th>Montant</th><th>Frais</th><th>Frais retrait</th><th>Solde</th></tr>
             </thead>
             <tbody>
             <?php foreach ($operations as $o): ?>
@@ -43,6 +43,7 @@
                     </td>
                     <td class="tnum"><strong class="amt <?= $cls ?>" style="font-weight:600;"><?= $sign ?><?= number_format($o['montant'], 0, ',', ' ') ?> Ar</strong></td>
                     <td class="muted tnum"><?= number_format($o['frais'], 0, ',', ' ') ?> Ar</td>
+                    <td class="muted tnum"><?= $o['frais_retrait'] > 0 ? number_format($o['frais_retrait'], 0, ',', ' ') . ' Ar' : '—' ?></td>
                     <td class="tnum">—</td>
                 </tr>
             <?php endforeach; ?>

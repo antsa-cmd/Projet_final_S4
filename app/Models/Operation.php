@@ -15,6 +15,7 @@ class Operation extends Model
         'montant',
         'frais',
         'commission',
+        'frais_retrait',
     ];
     protected $returnType       = 'array';
     protected $useTimestamps    = false;

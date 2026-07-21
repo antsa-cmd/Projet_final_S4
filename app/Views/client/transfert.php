@@ -22,10 +22,18 @@
                 <input type="number" step="0.01" min="1" name="montant" id="montant" placeholder="0" required>
             </div>
 
+            <div class="field" id="field-inclure-retrait" style="display:none;">
+                <label class="check">
+                    <input type="checkbox" name="inclure_retrait" id="inclure-retrait" value="1">
+                    <span>Inclure les frais de retrait du destinataire</span>
+                </label>
+            </div>
+
             <div class="summary" id="summary" style="display:none;">
                 <div class="row"><span class="k">Montant</span><span class="v tnum" id="s-montant">0 Ar</span></div>
                 <div class="row"><span class="k">Frais</span><span class="v tnum" id="s-frais">0 Ar</span></div>
                 <div class="row" id="row-commission" style="display:none;"><span class="k">Commission inter-opérateur</span><span class="v tnum" id="s-commission">0 Ar</span></div>
+                <div class="row" id="row-frais-retrait" style="display:none;"><span class="k">Frais de retrait</span><span class="v tnum" id="s-frais-retrait">0 Ar</span></div>
                 <div class="row total"><span>Total à débiter</span><span class="tnum" id="s-total">0 Ar</span></div>
             </div>
 
@@ -44,9 +52,12 @@ document.getElementById('dest').addEventListener('input', function () {
     var box = document.getElementById('dest-nom');
     var opBox = document.getElementById('dest-op');
     var srcOpBox = document.getElementById('src-op');
+    var retraitField = document.getElementById('field-inclure-retrait');
     if (tel.length < 9) {
         box.style.display = 'none';
         opBox.style.display = 'none';
+        srcOpBox.style.display = 'none';
+        retraitField.style.display = 'none';
         return;
     }
     destTimer = setTimeout(function () {
@@ -70,6 +81,11 @@ document.getElementById('dest').addEventListener('input', function () {
                 } else {
                     srcOpBox.style.display = 'none';
                 }
+                if (d.destOperateur && d.srcOperateur && d.destOperateur === d.srcOperateur) {
+                    retraitField.style.display = 'block';
+                } else {
+                    retraitField.style.display = 'none';
+                }
             });
     }, 400);
 });
@@ -79,9 +95,11 @@ document.getElementById('montant').addEventListener('input', function () {
     var box = document.getElementById('summary');
     if (m <= 0) { box.style.display = 'none'; return; }
     var dest = document.getElementById('dest').value.trim();
+    var inclureRetrait = document.getElementById('inclure-retrait').checked ? '1' : '0';
     var url = '<?= site_url('client/frais') ?>?type=transfert&montant=' + m;
     if (dest.length >= 9) {
         url += '&dest=' + encodeURIComponent(dest);
+        url += '&inclure_retrait=' + inclureRetrait;
     }
     fetch(url)
         .then(r => r.json()).then(function (d) {
@@ -94,6 +112,47 @@ document.getElementById('montant').addEventListener('input', function () {
                 document.getElementById('s-commission').textContent = Number(d.commission).toLocaleString('fr-FR') + ' Ar';
             } else {
                 rowComm.style.display = 'none';
+            }
+            var rowRetrait = document.getElementById('row-frais-retrait');
+            if (d.frais_retrait > 0) {
+                rowRetrait.style.display = 'flex';
+                document.getElementById('s-frais-retrait').textContent = Number(d.frais_retrait).toLocaleString('fr-FR') + ' Ar';
+            } else {
+                rowRetrait.style.display = 'none';
+            }
+            document.getElementById('s-total').textContent = Number(d.total).toLocaleString('fr-FR') + ' Ar';
+        });
+});
+
+document.getElementById('inclure-retrait').addEventListener('change', function () {
+    var m = parseFloat(document.getElementById('montant').value) || 0;
+    if (m <= 0) { return; }
+    var dest = document.getElementById('dest').value.trim();
+    var inclureRetrait = this.checked ? '1' : '0';
+    var url = '<?= site_url('client/frais') ?>?type=transfert&montant=' + m;
+    if (dest.length >= 9) {
+        url += '&dest=' + encodeURIComponent(dest);
+        url += '&inclure_retrait=' + inclureRetrait;
+    }
+    fetch(url)
+        .then(r => r.json()).then(function (d) {
+            var box = document.getElementById('summary');
+            box.style.display = 'block';
+            document.getElementById('s-montant').textContent = m.toLocaleString('fr-FR') + ' Ar';
+            document.getElementById('s-frais').textContent = Number(d.frais).toLocaleString('fr-FR') + ' Ar';
+            var rowComm = document.getElementById('row-commission');
+            if (d.commission > 0) {
+                rowComm.style.display = 'flex';
+                document.getElementById('s-commission').textContent = Number(d.commission).toLocaleString('fr-FR') + ' Ar';
+            } else {
+                rowComm.style.display = 'none';
+            }
+            var rowRetrait = document.getElementById('row-frais-retrait');
+            if (d.frais_retrait > 0) {
+                rowRetrait.style.display = 'flex';
+                document.getElementById('s-frais-retrait').textContent = Number(d.frais_retrait).toLocaleString('fr-FR') + ' Ar';
+            } else {
+                rowRetrait.style.display = 'none';
             }
             document.getElementById('s-total').textContent = Number(d.total).toLocaleString('fr-FR') + ' Ar';
         });

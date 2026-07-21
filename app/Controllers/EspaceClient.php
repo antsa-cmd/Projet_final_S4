@@ -83,6 +83,12 @@ class EspaceClient extends BaseController
         return $prefixe['id'] ?? null;
     }
 
+    private function operateurApplicationId()
+    {
+        $p = (new \App\Models\Parametre())->where('cle', 'operateur_application_id')->first();
+        return $p ? (int) $p['valeur'] : null;
+    }
+
     private function commissionFor($srcTel, $destTel, $montant)
     {
         $srcOp = $this->operateurId($srcTel);
@@ -123,17 +129,9 @@ class EspaceClient extends BaseController
         if (! preg_match('/^[0-9]{9,10}$/', $telephone)) {
             return redirect()->back()->withInput()->with('error', 'Numéro de téléphone invalide.');
         }
-        // Block login if phone prefix is not configured
-        $prefixe = (new \App\Models\Prefixe())
-            ->where('prefixe', substr($telephone, 0, 3))
-            ->first();
-        if (! $prefixe) {
-            $prefixe = (new \App\Models\Prefixe())
-                ->where('prefixe', substr($telephone, 0, 4))
-                ->first();
-        }
-        if (! $prefixe) {
-            return redirect()->back()->withInput()->with('error', 'Préfixe inconnu.');
+        $appOpId = $this->operateurApplicationId();
+        if ($appOpId === null || $this->operateurId($telephone) !== $appOpId) {
+            return redirect()->back()->withInput()->with('error', 'Connexion refusée : ce numéro n\'appartient pas à l\'opérateur de l\'application.');
         }
         $this->ensureClient($telephone);
         $this->session->set('telephone', $telephone);
@@ -328,11 +326,19 @@ class EspaceClient extends BaseController
         $commission = ($dest && $type === 'transfert')
             ? $this->commissionFor($tel, $dest, $montant)
             : 0;
+
+        $inclureRetrait = $this->request->getGet('inclure_retrait') === '1';
+        $fraisRetrait = 0;
+        if ($inclureRetrait && $dest && $type === 'transfert' && $destOperateur === $this->operateurNom($tel)) {
+            $fraisRetrait = $this->fraisFor('retrait', $montant);
+        }
+
         return $this->response->setJSON([
-            'frais'      => $frais,
-            'commission' => $commission,
-            'total'      => $montant + $frais + $commission,
-            'destNom'    => $destNom,
+            'frais'         => $frais,
+            'commission'    => $commission,
+            'frais_retrait' => $fraisRetrait,
+            'total'         => $montant + $frais + $commission + $fraisRetrait,
+            'destNom'       => $destNom,
             'destOperateur' => $destOperateur,
             'srcOperateur'  => $this->operateurNom($tel),
         ]);
@@ -353,6 +359,9 @@ class EspaceClient extends BaseController
         if ($destTel === $tel) {
             return redirect()->back()->with('error', 'Vous ne pouvez pas vous transférer à vous-même.');
         }
+        if ($this->operateurNom($destTel) === 'Inconnu') {
+            return redirect()->back()->with('error', 'Opérateur du destinataire inconnu ou non autorisé.');
+        }
         if ($montant <= 0) {
             return redirect()->back()->with('error', 'Montant invalide.');
         }
@@ -361,16 +370,21 @@ class EspaceClient extends BaseController
         $srcCompte = $this->getCompte($srcClient['id']);
         $frais     = $this->fraisFor('transfert', $montant);
         $commission = $this->commissionFor($tel, $destTel, $montant);
+        $inclureRetrait = $this->request->getPost('inclure_retrait') === '1';
+        $fraisRetrait = 0;
+        if ($inclureRetrait && $this->operateurNom($destTel) === $this->operateurNom($tel)) {
+            $fraisRetrait = $this->fraisFor('retrait', $montant);
+        }
 
-        if ($srcCompte['solde'] < ($montant + $frais + $commission)) {
-            return redirect()->back()->with('error', 'Solde insuffisant (montant + frais + commission inter-opérateur).');
+        if ($srcCompte['solde'] < ($montant + $frais + $commission + $fraisRetrait)) {
+            return redirect()->back()->with('error', 'Solde insuffisant (montant + frais + commission + frais de retrait).');
         }
 
         $destClient = $this->ensureClient($destTel);
         $destCompte = $this->getCompte($destClient['id']);
 
         $compteModel = new Compte();
-        $compteModel->update($srcCompte['id'], ['solde' => $srcCompte['solde'] - $montant - $frais - $commission]);
+        $compteModel->update($srcCompte['id'], ['solde' => $srcCompte['solde'] - $montant - $frais - $commission - $fraisRetrait]);
         $compteModel->update($destCompte['id'], ['solde' => $destCompte['solde'] + $montant]);
 
         $type = (new TypeOperation())->where('nom', 'transfert')->first();
@@ -381,6 +395,7 @@ class EspaceClient extends BaseController
             'montant'            => $montant,
             'frais'              => $frais,
             'commission'         => $commission,
+            'frais_retrait'      => $fraisRetrait,
         ]);
 
         return redirect()->to('client/dashboard')->with('success', 'Transfert de ' . number_format($montant, 2, ',', ' ') . ' Ar vers ' . esc($destTel) . ' effectué.');

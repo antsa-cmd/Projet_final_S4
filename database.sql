@@ -81,6 +81,7 @@ CREATE TABLE operation (
     montant REAL NOT NULL,
     frais REAL NOT NULL,
     commission REAL DEFAULT 0,
+    frais_retrait REAL DEFAULT 0,
 
     date_operation DATETIME DEFAULT CURRENT_TIMESTAMP,
 
@@ -92,4 +93,9 @@ CREATE TABLE operation (
 
     FOREIGN KEY(compte_destination)
         REFERENCES compte(id)
+);
+
+CREATE TABLE parametre (
+    cle TEXT PRIMARY KEY,
+    valeur TEXT NOT NULL
 );
