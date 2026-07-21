@@ -44,7 +44,7 @@
                     <td class="tnum"><strong class="amt <?= $cls ?>" style="font-weight:600;"><?= $sign ?><?= number_format($o['montant'], 0, ',', ' ') ?> Ar</strong></td>
                     <td class="muted tnum"><?= number_format($o['frais'], 0, ',', ' ') ?> Ar</td>
                     <td class="muted tnum"><?= $o['frais_retrait'] > 0 ? number_format($o['frais_retrait'], 0, ',', ' ') . ' Ar' : '—' ?></td>
-                    <td class="tnum">—</td>
+                    <td class="tnum"><?= number_format($o['solde_apres'], 0, ',', ' ') ?> Ar</td>
                 </tr>
             <?php endforeach; ?>
             </tbody>

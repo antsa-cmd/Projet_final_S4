@@ -300,6 +300,7 @@ class EspaceClient extends BaseController
             'title_brand' => 'VOLA',
             'nav'         => ['Tableau de bord' => 'client/dashboard', 'Déconnexion' => 'client/logout'],
             'telephone'   => $tel,
+            'srcOperateur' => $this->operateurNom($tel),
         ];
         return view('client/transfert', $data);
     }
@@ -419,6 +420,18 @@ class EspaceClient extends BaseController
             ->groupEnd()
             ->orderBy('date_operation', 'desc')
             ->findAll();
+
+        $solde = (float) $compte['solde'];
+        $compteModel = new Compte();
+        foreach ($ops as &$o) {
+            $o['solde_apres'] = $solde;
+            if ((int) $o['compte_source'] === (int) $compte['id']) {
+                $solde += (float) $o['montant'] + (float) $o['frais'] + (float) $o['commission'] + (float) $o['frais_retrait'];
+            } elseif ((int) $o['compte_destination'] === (int) $compte['id']) {
+                $solde -= (float) $o['montant'];
+            }
+        }
+        unset($o);
 
         $data = [
             'title'       => 'Historique',

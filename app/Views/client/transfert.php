@@ -45,6 +45,7 @@
 
 <?php $this->section('scripts'); ?>
 <script>
+var srcOperateur = <?= json_encode($srcOperateur ?? '') ?>;
 var destTimer;
 document.getElementById('dest').addEventListener('input', function () {
     clearTimeout(destTimer);
@@ -63,6 +64,7 @@ document.getElementById('dest').addEventListener('input', function () {
     destTimer = setTimeout(function () {
         fetch('<?= site_url('client/frais') ?>?type=transfert&montant=0&dest=' + encodeURIComponent(tel))
             .then(r => r.json()).then(function (d) {
+                console.log('frais api', d);
                 if (d.destNom) {
                     box.style.display = 'block';
                     box.textContent = 'Destinataire : ' + d.destNom;
@@ -81,7 +83,7 @@ document.getElementById('dest').addEventListener('input', function () {
                 } else {
                     srcOpBox.style.display = 'none';
                 }
-                if (d.destOperateur && d.srcOperateur && d.destOperateur === d.srcOperateur) {
+                if (d.destOperateur && srcOperateur && d.destOperateur === srcOperateur) {
                     retraitField.style.display = 'block';
                 } else {
                     retraitField.style.display = 'none';
