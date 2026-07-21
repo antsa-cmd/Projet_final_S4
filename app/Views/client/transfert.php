@@ -19,7 +19,7 @@
             <div class="field">
                 <label>Montant total à transférer (Ar)</label>
                 <input type="number" step="0.01" min="1" name="montant" id="montant" placeholder="0" required>
-                <div class="help">Ce montant sera divisé équitablement entre tous les destinataires.</div>
+                <div class="help">Chaque destinataire recevra ce montant.</div>
             </div>
 
             <div class="field" style="display:flex;align-items:center;gap:10px;margin-top:4px;">
@@ -73,12 +73,12 @@ function updateSummary(m, nbDest) {
         .then(r => r.json()).then(function (d) {
             var box = document.getElementById('summary');
             box.style.display = 'block';
-            document.getElementById('s-montant').textContent = Number(m).toLocaleString('fr-FR') + ' Ar';
-            document.getElementById('s-frais').textContent = Number(d.frais).toLocaleString('fr-FR') + ' Ar';
+            document.getElementById('s-montant').textContent = Number(m).toLocaleString('fr-FR') + ' Ar par destinataire';
+            document.getElementById('s-frais').textContent = (Number(d.frais) * nbDest).toLocaleString('fr-FR') + ' Ar';
             var rowComm = document.getElementById('row-commission');
             if (d.commission > 0) {
                 rowComm.style.display = 'flex';
-                document.getElementById('s-commission').textContent = Number(d.commission).toLocaleString('fr-FR') + ' Ar';
+                document.getElementById('s-commission').textContent = (Number(d.commission) * nbDest).toLocaleString('fr-FR') + ' Ar';
             } else {
                 rowComm.style.display = 'none';
             }
@@ -93,7 +93,7 @@ function updateSummary(m, nbDest) {
             var rowParDest = document.getElementById('row-par-dest');
             if (nbDest > 1) {
                 rowParDest.style.display = 'flex';
-                document.getElementById('s-par-dest').textContent = (Number(d.total) / nbDest).toLocaleString('fr-FR') + ' Ar par destinataire';
+                document.getElementById('s-par-dest').textContent = 'Chaque destinataire reçoit ' + Number(m).toLocaleString('fr-FR') + ' Ar';
             } else {
                 rowParDest.style.display = 'none';
             }

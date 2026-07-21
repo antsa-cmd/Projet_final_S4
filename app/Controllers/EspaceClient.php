@@ -238,7 +238,7 @@ class EspaceClient extends BaseController
             'frais'             => $frais,
         ]);
 
-        return redirect()->to('client/dashboard')->with('success', 'Dépôt de ' . number_format($montant, 2, ',', ' ') . ' Ar effectué.');
+        return redirect()->to('client/historique')->with('success', 'Dépôt de ' . number_format($montant, 2, ',', ' ') . ' Ar effectué.');
     }
 
     public function retrait()
@@ -288,7 +288,7 @@ class EspaceClient extends BaseController
             'frais'              => $frais,
         ]);
 
-        return redirect()->to('client/dashboard')->with('success', 'Retrait de ' . number_format($montant, 2, ',', ' ') . ' Ar effectué.');
+        return redirect()->to('client/historique')->with('success', 'Retrait de ' . number_format($montant, 2, ',', ' ') . ' Ar effectué.');
     }
 
     public function transfert()
@@ -338,7 +338,7 @@ class EspaceClient extends BaseController
             $fraisRetraitSupplementaire = $this->fraisFor('retrait', $montant) * $nbDest;
         }
 
-        $total = $montant + $frais + $commission + $fraisRetraitSupplementaire;
+        $total = ($montant * $nbDest) + ($frais * $nbDest) + $commission + $fraisRetraitSupplementaire;
 
         return $this->response->setJSON([
             'frais'      => $frais,
@@ -378,31 +378,42 @@ class EspaceClient extends BaseController
             if ($destTel === $tel) {
                 return redirect()->back()->with('error', 'Vous ne pouvez pas vous transférer à vous-même.');
             }
+
+            $prefixe = (new \App\Models\Prefixe())
+                ->where('prefixe', substr($destTel, 0, 3))
+                ->first();
+            if (! $prefixe) {
+                $prefixe = (new \App\Models\Prefixe())
+                    ->where('prefixe', substr($destTel, 0, 4))
+                    ->first();
+            }
+            if (! $prefixe) {
+                return redirect()->back()->with('error', 'Préfixe non configuré pour le numéro : ' . esc($destTel));
+            }
         }
 
         if ($montantTotal <= 0) {
             return redirect()->back()->with('error', 'Montant invalide.');
         }
 
-        $montantParDest = $montantTotal / $nbDest;
+        $montantParDest = $montantTotal;
 
         $srcClient = $this->ensureClient($tel);
         $srcCompte = $this->getCompte($srcClient['id']);
 
-        $fraisTotal         = $this->fraisFor('transfert', $montantTotal);
-        $commissionTotal    = 0;
+        $fraisUnitaire        = $this->fraisFor('transfert', $montantTotal);
+        $commissionTotal      = 0;
+        $fraisRetraitUnit     = 0;
         foreach ($liste as $destTel) {
-            $commissionTotal += $this->commissionFor($tel, $destTel, $montantParDest);
-        }
-
-        $fraisRetraitSupplementaire = 0;
-        if ($inclureFrais) {
-            foreach ($liste as $destTel) {
-                $fraisRetraitSupplementaire += $this->fraisFor('retrait', $montantParDest);
+            $commissionTotal += $this->commissionFor($tel, $destTel, $montantTotal);
+            if ($inclureFrais) {
+                $fraisRetraitUnit += $this->fraisFor('retrait', $montantTotal);
             }
         }
 
-        $totalADebiter = $montantTotal + $fraisTotal + $commissionTotal + $fraisRetraitSupplementaire;
+        $fraisTotal               = $fraisUnitaire * $nbDest;
+        $fraisRetraitSupplementaire = $fraisRetraitUnit;
+        $totalADebiter = ($montantTotal * $nbDest) + $fraisTotal + $commissionTotal + $fraisRetraitSupplementaire;
 
         if ($srcCompte['solde'] < $totalADebiter) {
             return redirect()->back()->with('error', 'Solde insuffisant (montant + frais + commission' . ($inclureFrais ? ' + frais retrait inclus' : '') . ').');
@@ -419,15 +430,15 @@ class EspaceClient extends BaseController
             $destClient = $this->ensureClient($destTel);
             $destCompte = $this->getCompte($destClient['id']);
 
-            $db->table('compte')->where('id', $destCompte['id'])->update(['solde' => $destCompte['solde'] + $montantParDest]);
+            $db->table('compte')->where('id', $destCompte['id'])->update(['solde' => $destCompte['solde'] + $montantTotal]);
 
             $db->table('operation')->insert([
                 'type_operation_id'    => $type['id'],
                 'compte_source'        => $srcCompte['id'],
                 'compte_destination'   => $destCompte['id'],
-                'montant'              => $montantParDest,
-                'frais'                => $fraisTotal / $nbDest,
-                'commission'           => $commissionTotal / $nbDest,
+                'montant'              => $montantTotal,
+                'frais'                => $fraisUnitaire,
+                'commission'           => $this->commissionFor($tel, $destTel, $montantTotal),
                 'inclure_frais_retrait'=> $inclureFrais ? 1 : 0,
             ]);
         }
@@ -439,7 +450,7 @@ class EspaceClient extends BaseController
         }
 
         $succesMsg = 'Transfert de ' . number_format($montantTotal, 2, ',', ' ') . ' Ar vers ' . $nbDest . ' destinataire(s) effectué.';
-        return redirect()->to('client/dashboard')->with('success', $succesMsg);
+        return redirect()->to('client/historique')->with('success', $succesMsg);
     }
 
     public function historique()
